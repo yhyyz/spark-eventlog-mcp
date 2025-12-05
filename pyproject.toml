@@ -1,0 +1,32 @@
+[project]
+name = "spark-eventlog-mcp"
+version = "1.0.0"
+description = "MCP Server for Spark Event Log Analysis"
+requires-python = ">=3.12"
+authors = [
+    {name = "Spark Analytics Team", email = "team@example.com"}
+]
+dependencies = [
+    "fastmcp>=2.0.0",
+    "pydantic>=2.0.0",
+    "asyncio",
+    "aiofiles",
+    "httpx",
+    "boto3",
+    "botocore",
+    "pandas",
+    "numpy",
+    "plotly",
+    "jinja2",
+    "fastapi>=0.123.9",
+    "aiohttp>=3.13.2",
+]
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+spark-eventlog-mcp = "spark_eventlog_mcp.server:main"

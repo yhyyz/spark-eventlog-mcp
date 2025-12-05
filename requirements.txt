@@ -1,0 +1,35 @@
+# Core MCP dependencies
+fastmcp>=2.0.0
+pydantic>=2.0.0
+
+# Note: FastAPI integration is handled by FastMCP 2.0 internally
+# No additional FastAPI dependencies needed
+
+# Async and HTTP support
+asyncio
+aiofiles
+httpx
+aiohttp
+
+# AWS support
+boto3
+botocore
+
+# Data processing
+pandas
+numpy
+
+# Visualization and reporting
+plotly
+jinja2
+
+# Utilities
+python-dateutil
+pytz
+
+# Development dependencies (optional)
+pytest>=7.0.0
+pytest-asyncio
+black
+flake8
+mypy

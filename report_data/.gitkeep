@@ -1,0 +1,2 @@
+# This directory stores generated HTML reports
+# Files in this directory are served as static files via FastAPI
