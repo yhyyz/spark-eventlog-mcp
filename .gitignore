@@ -160,3 +160,8 @@ aws-credentials.json
 mcp-config.json
 server-logs/
 report_data/*.html
+
+# Development and tooling directories
+.spec-workflow/
+.kiro/
+.serena/
