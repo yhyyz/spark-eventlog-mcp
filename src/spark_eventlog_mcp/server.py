@@ -66,7 +66,6 @@ mcp = FastMCP(
 
 # ==================== MCP Tools (保留所有原有工具) ====================
 
-@mcp.tool()
 async def parse_eventlog(input_data: ParseEventLogInput) -> Dict[str, Any]:
     """
     Parse Spark event logs from various data sources (S3, URL, local files)
@@ -129,7 +128,6 @@ async def parse_eventlog(input_data: ParseEventLogInput) -> Dict[str, Any]:
             f"Failed to parse event logs: {str(e)}"
         )
 
-@mcp.tool()
 async def analyze_performance(input_data: AnalyzePerformanceInput) -> Dict[str, Any]:
     """
     Perform comprehensive performance analysis of Spark event logs
@@ -209,34 +207,124 @@ async def analyze_performance(input_data: AnalyzePerformanceInput) -> Dict[str, 
 @mcp.tool()
 async def generate_report(input_data: GenerateReportInput) -> Dict[str, Any]:
     """
-    Generate comprehensive HTML, JSON, or PDF reports from analysis results
-
-    This tool creates formatted reports with visualizations, metrics summaries,
-    and optimization recommendations based on the analysis results.
+    Generate comprehensive reports with complete end-to-end processing
+    
+    This tool provides complete end-to-end Spark event log processing and report generation:
+    1. Data parsing and validation from various sources (S3, URL, local files)
+    2. Comprehensive performance analysis with configurable depth and metrics
+    3. Optimization suggestions extraction and categorization
+    4. Formatted report generation with visualizations and recommendations
+    
+    The tool automatically handles the complete pipeline and can work in multiple modes:
+    - End-to-end: Provide data_source for complete processing from raw data
+    - Analysis + Report: Use current session data for analysis and reporting
+    - Report-only: Provide existing analysis_result to skip analysis phase
 
     Args:
-        input_data: Report configuration
+        input_data: Complete configuration including:
+            - report_config: Report formatting and content configuration (format, visualizations, etc.)
+            - data_source: Optional data source for end-to-end processing (S3/URL/local file)
+            - analysis_config: Optional analysis configuration (depth, metrics, etc.)
+            - analysis_result: Optional existing analysis result (skips parsing and analysis if provided)
 
     Returns:
-        Generated report with content and metadata
+        Comprehensive report with content, metadata, analysis results, and optimization suggestions
+        including parsing status, analysis metadata, and suggestion summaries
     """
-    global _current_analysis
+    global _current_analysis, _current_data_source
 
     try:
-        # Use provided analysis result or current one
-        analysis_result = input_data.analysis_result or _current_analysis
+        parsing_performed = False
+        analysis_performed = False
+        analysis_result = input_data.analysis_result
 
+        # Phase 1: Data Parsing (if needed)
         if not analysis_result:
-            return create_error_response(
-                "ConfigurationError",
-                "No analysis result available. Please run analyze_performance first or provide analysis results."
-            )
+            data_source_to_use = input_data.data_source or _current_data_source
+            
+            # If we have a new data source, perform parsing
+            if input_data.data_source and input_data.data_source != _current_data_source:
+                logger.info(f"Starting end-to-end processing with new data source: {input_data.data_source.source_type}://{input_data.data_source.path}")
+                
+                # Create parse input and call parse_eventlog internally
+                parse_input = ParseEventLogInput(data_source=input_data.data_source)
+                parse_response = await parse_eventlog(parse_input)
+                
+                # Check parsing success
+                if not parse_response.get("success", False):
+                    return create_error_response(
+                        "ParseError",
+                        f"Data parsing failed: {parse_response.get('message', 'Unknown error')}"
+                    )
+                
+                parsing_performed = True
+                data_source_to_use = input_data.data_source
+                logger.info("Data parsing completed successfully")
+            
+            # Verify we have a data source for analysis
+            if not data_source_to_use:
+                return create_error_response(
+                    "ConfigurationError",
+                    "No data source available for processing. "
+                    "Please provide data_source parameter or run parse_eventlog first, or provide existing analysis_result."
+                )
 
+        # Phase 2: Performance Analysis (if needed)
+        if not analysis_result:
+            logger.info("No existing analysis found, performing new analysis")
+            
+            # Use provided analysis config or default
+            analysis_config = input_data.analysis_config or AnalysisConfig()
+            
+            # Create analysis input and call analyze_performance internally
+            analysis_input = AnalyzePerformanceInput(
+                analysis_config=analysis_config,
+                data_source=data_source_to_use
+            )
+            
+            analysis_response = await analyze_performance(analysis_input)
+            
+            # Check analysis success
+            if not analysis_response.get("success", False):
+                return create_error_response(
+                    "AnalysisError",
+                    f"Performance analysis failed: {analysis_response.get('message', 'Unknown error')}"
+                )
+            
+            # Get analysis result from current session
+            analysis_result = _current_analysis
+            analysis_performed = True
+            
+            if not analysis_result:
+                return create_error_response(
+                    "AnalysisError", 
+                    "Analysis completed but no result available"
+                )
+            
+            logger.info(f"Performance analysis completed for application: {analysis_result.application_id}")
+
+        # Phase 3: Optimization Suggestions Extraction
+        logger.info("Extracting optimization suggestions")
+        
+        suggestions_input = GetOptimizationSuggestionsInput(
+            focus_areas=[],  # Get all suggestions
+            priority_filter=None  # No priority filter
+        )
+        
+        suggestions_response = await get_optimization_suggestions(suggestions_input)
+        optimization_suggestions = []
+        
+        if suggestions_response.get("success", False):
+            optimization_suggestions = suggestions_response.get("data", {}).get("suggestions", [])
+            logger.info(f"Retrieved {len(optimization_suggestions)} optimization suggestions")
+        else:
+            logger.warning(f"Failed to get optimization suggestions: {suggestions_response.get('message', 'Unknown error')}")
+
+        # Phase 4: Report Generation
         logger.info(f"Generating {input_data.report_config.report_format} report")
 
-        # Generate report using mature generator
         if input_data.report_config.report_format == "html":
-            # 传入服务器地址和端口,生成报告并获取 FastAPI URL
+            # Generate HTML report with server configuration
             report_address = await report_generator.generate_html_report(
                 analysis_result,
                 server_host=_server_host,
@@ -245,7 +333,7 @@ async def generate_report(input_data: GenerateReportInput) -> Dict[str, Any]:
             )
 
             if _transport_mode.lower() == "streamable-http":
-                # HTTP 模式下返回 HTTP URL
+                # HTTP mode: return HTTP URL for browser access
                 response_data = {
                     "report_generated": True,
                     "report_format": "html",
@@ -253,18 +341,21 @@ async def generate_report(input_data: GenerateReportInput) -> Dict[str, Any]:
                     "report_address": report_address,
                 }
             else:
-                # stdio 模式下返回文件路径
+                # stdio mode: return file path
                 response_data = {
                     "report_generated": True,
                     "report_format": "html",
                     "title": f"Spark Analysis Report - {analysis_result.application_name}",
                     "report_address": report_address,
                 }
+                
         elif input_data.report_config.report_format == "json":
+            # Return JSON format with full analysis data and suggestions
             response_data = {
                 "report_generated": True,
                 "report_format": "json",
-                "report_data": analysis_result.dict()
+                "report_data": analysis_result.dict(),
+                "optimization_suggestions": optimization_suggestions
             }
         else:
             return create_error_response(
@@ -272,24 +363,82 @@ async def generate_report(input_data: GenerateReportInput) -> Dict[str, Any]:
                 f"Unsupported report format: {input_data.report_config.report_format}"
             )
 
-        logger.info(f"Report generated successfully")
+        # Add comprehensive processing metadata
+        response_data["processing_metadata"] = {
+            "end_to_end_processing": parsing_performed or analysis_performed,
+            "phases_completed": {
+                "data_parsing": parsing_performed,
+                "performance_analysis": analysis_performed,
+                "optimization_extraction": len(optimization_suggestions) > 0,
+                "report_generation": True
+            },
+            "data_source": {
+                "type": _current_data_source.source_type if _current_data_source else None,
+                "path": _current_data_source.path if _current_data_source else None
+            } if _current_data_source else None
+        }
+
+        # Add analysis metadata
+        response_data["analysis_metadata"] = {
+            "application_id": analysis_result.application_id,
+            "application_name": analysis_result.application_name,
+            "analysis_timestamp": analysis_result.analysis_timestamp.isoformat(),
+            "total_optimization_suggestions": len(optimization_suggestions),
+            "analysis_summary": {
+                "total_jobs": len(analysis_result.jobs),
+                "total_tasks": sum(job.num_tasks for job in analysis_result.jobs),
+                "total_duration_ms": analysis_result.duration_ms,
+                "successful_jobs": analysis_result.successful_jobs,
+                "failed_jobs": analysis_result.failed_jobs,
+                "total_executors": analysis_result.total_executors
+            }
+        }
+        
+        # Add optimization suggestions summary
+        if optimization_suggestions:
+            priority_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+            category_counts = {}
+            
+            for suggestion in optimization_suggestions:
+                priority = suggestion.get('priority', 'LOW')
+                category = suggestion.get('category', 'OTHER')
+                
+                priority_counts[priority] = priority_counts.get(priority, 0) + 1
+                category_counts[category] = category_counts.get(category, 0) + 1
+            
+            response_data["optimization_summary"] = {
+                "total_suggestions": len(optimization_suggestions),
+                "by_priority": priority_counts,
+                "by_category": category_counts,
+                "high_priority_suggestions": [s for s in optimization_suggestions if s.get('priority') == 'HIGH']
+            }
+
+        logger.info(f"End-to-end report generation completed successfully")
 
         return create_success_response(
             response_data,
             {
                 "generation_timestamp": datetime.now().isoformat(),
-                "config_used": input_data.report_config.dict()
+                "config_used": {
+                    "report_config": input_data.report_config.dict(),
+                    "analysis_config": input_data.analysis_config.dict() if input_data.analysis_config else None
+                },
+                "processing_summary": {
+                    "parsing_performed": parsing_performed,
+                    "analysis_performed": analysis_performed,
+                    "suggestions_included": len(optimization_suggestions),
+                    "total_processing_phases": sum([parsing_performed, analysis_performed, True, True])  # parse, analyze, suggest, report
+                }
             }
         )
 
     except Exception as e:
-        logger.error(f"Report generation failed: {str(e)}")
+        logger.error(f"End-to-end report generation failed: {str(e)}")
         return create_error_response(
             "ReportError",
-            f"Report generation failed: {str(e)}"
+            f"End-to-end report generation failed: {str(e)}"
         )
 
-@mcp.tool()
 async def get_optimization_suggestions(
     input_data: GetOptimizationSuggestionsInput
 ) -> Dict[str, Any]:
@@ -454,26 +603,43 @@ async def server_info():
         "content": {
             "name": config["server_name"],
             "version": config["server_version"],
-            "description": "MCP Server for comprehensive Spark event log analysis with FastAPI integration",
-            "capabilities": [
-                "Event log parsing (S3, URL, local files)",
-                "Performance analysis and metrics calculation",
-                "Resource utilization monitoring",
-                "Shuffle performance analysis",
-                "Task execution analysis",
-                "Optimization suggestions generation",
-                "HTML/JSON report generation",
-                "Interactive visualization support",
-                "Static file serving for HTML reports",
-                "MCP resource-based report access",
-                "RESTful API endpoints via FastAPI"
+            "description": "End-to-end MCP Server for comprehensive Spark event log analysis with integrated processing pipeline",
+            "primary_capability": "Single-command end-to-end Spark event log processing and report generation",
+            "processing_pipeline": [
+                "Data parsing and validation from multiple sources (S3, URL, local files)",
+                "Comprehensive performance analysis with configurable metrics",
+                "Intelligent optimization suggestions with priority categorization", 
+                "Professional report generation with interactive visualizations"
+            ],
+            "key_features": [
+                "End-to-end processing in single tool call",
+                "Automatic data source detection and validation",
+                "Configurable analysis depth and focus areas",
+                "Multi-format report generation (HTML/JSON)",
+                "Real-time processing metadata and phase tracking",
+                "Comprehensive optimization recommendations",
+                "Interactive HTML reports with FastAPI integration",
+                "Session management and data caching"
             ],
             "supported_data_sources": ["s3", "url", "local"],
             "default_source_type": config["default_source_type"],
-            "supported_report_formats": ["html", "json", "pdf"],
+            "supported_report_formats": ["html", "json"],
+            "analysis_capabilities": [
+                "Application-level metrics and timing analysis",
+                "Stage-by-stage execution breakdown",
+                "Task distribution and execution patterns",
+                "Shuffle performance and data locality analysis",
+                "Resource utilization (CPU, memory, storage)",
+                "Garbage collection impact assessment",
+                "Performance bottleneck identification",
+                "Optimization opportunity detection"
+            ],
             "configuration": {
                 "cache_enabled": config["cache_enabled"],
-                "cache_ttl": config["cache_ttl"]
+                "cache_ttl": config["cache_ttl"],
+                "end_to_end_processing": True,
+                "automatic_optimization_suggestions": True,
+                "interactive_reports": True
             }
         },
         "mimeType": "application/json"
@@ -487,49 +653,103 @@ async def tools_documentation():
         "name": "Spark EventLog MCP Server Tools Documentation",
         "content": {
             "tools": {
-                "parse_eventlog": {
-                    "description": "Parse Spark event logs from various data sources",
-                    "input": "ParseEventLogInput with data source configuration",
-                    "output": "Parsing results with event summary",
-                    "example": {
+                "generate_report": {
+                    "description": "Complete end-to-end Spark event log processing and report generation",
+                    "input": "GenerateReportInput with comprehensive configuration options",
+                    "output": "Generated report with complete processing metadata, analysis results, and optimization suggestions",
+                    "processing_modes": {
+                        "end_to_end": "Provide data_source for complete processing from raw data to final report",
+                        "analysis_and_report": "Use current session data for analysis and report generation", 
+                        "report_only": "Provide existing analysis_result to generate report from existing analysis"
+                    },
+                    "processing_phases": [
+                        "1. Data Parsing - Load and validate Spark event logs from various sources",
+                        "2. Performance Analysis - Extract metrics, resource utilization, and execution patterns", 
+                        "3. Optimization Suggestions - Generate categorized recommendations for performance improvements",
+                        "4. Report Generation - Create formatted reports with visualizations and insights"
+                    ],
+                    "example_end_to_end": {
                         "data_source": {
                             "source_type": "s3",
-                            "path": "s3://my-bucket/spark-logs/"
-                        }
-                    },
-                    "note": f"Default source type is '{config['default_source_type']}'"
-                },
-                "analyze_performance": {
-                    "description": "Perform comprehensive performance analysis",
-                    "input": "AnalyzePerformanceInput with analysis configuration",
-                    "output": "Complete analysis results with metrics",
-                    "example": {
+                            "path": "s3://my-bucket/spark-logs/application_123/"
+                        },
                         "analysis_config": {
+                            "analysis_depth": "detailed",
                             "include_shuffle_analysis": True,
                             "include_resource_analysis": True,
-                            "analysis_depth": "detailed"
-                        }
-                    }
-                },
-                "generate_report": {
-                    "description": "Generate formatted reports from analysis results",
-                    "input": "GenerateReportInput with report configuration",
-                    "output": "Generated report with content",
-                    "example": {
+                            "include_task_analysis": True,
+                            "include_optimization_suggestions": True
+                        },
                         "report_config": {
                             "report_format": "html",
-                            "include_visualizations": True
+                            "include_visualizations": True,
+                            "include_raw_metrics": False
                         }
-                    }
+                    },
+                    "example_report_only": {
+                        "analysis_result": {
+                            "application_id": "app-20231201-123456",
+                            "jobs": "...",
+                            "optimization_recommendations": "..."
+                        },
+                        "report_config": {
+                            "report_format": "json",
+                            "include_visualizations": False,
+                            "include_raw_metrics": True
+                        }
+                    },
+                    "supported_formats": ["html", "json"],
+                    "supported_sources": ["s3", "url", "local"],
+                    "features": [
+                        "Automatic data source validation and parsing",
+                        "Configurable performance analysis depth and metrics",
+                        "Intelligent optimization suggestions with priority categorization",
+                        "Interactive HTML reports with visualizations",
+                        "Comprehensive JSON reports with raw data",
+                        "Processing metadata and phase tracking",
+                        "Error handling and detailed logging throughout pipeline"
+                    ]
                 },
-                "get_optimization_suggestions": {
-                    "description": "Get filtered optimization suggestions",
-                    "input": "GetOptimizationSuggestionsInput with filter options",
-                    "output": "Filtered suggestions with implementation details",
-                    "example": {
-                        "focus_areas": ["shuffle", "resource"],
-                        "priority_filter": "HIGH"
-                    }
+                "get_analysis_status": {
+                    "description": "Get current session status and processing summary",
+                    "input": "No parameters required",
+                    "output": "Current session information including data source status, analysis availability, and processing history"
+                },
+                "clear_session": {
+                    "description": "Clear current analysis session and reset all cached data", 
+                    "input": "No parameters required",
+                    "output": "Session clearing confirmation and reset status"
+                }
+            },
+            "workflow_guide": {
+                "simple_usage": [
+                    "Single call: generate_report with data_source for complete end-to-end processing",
+                    "Result: Comprehensive report with all analysis and optimization insights"
+                ],
+                "advanced_usage": [
+                    "1. Configure analysis_config for specific analysis requirements",
+                    "2. Use report_config to customize report format and content",
+                    "3. Leverage processing_metadata to track pipeline execution",
+                    "4. Use optimization_summary for focused performance improvements"
+                ],
+                "internal_functions": {
+                    "parse_eventlog": "Internal data parsing and validation (called automatically)",
+                    "analyze_performance": "Internal performance analysis engine (called automatically)", 
+                    "get_optimization_suggestions": "Internal optimization recommendation engine (called automatically)"
+                }
+            },
+            "data_sources": {
+                "s3": {
+                    "format": {"source_type": "s3", "path": "s3://bucket-name/path/to/logs/"},
+                    "requirements": "AWS credentials configured or IAM role permissions"
+                },
+                "url": {
+                    "format": {"source_type": "url", "path": "https://example.com/spark-logs.zip"},
+                    "requirements": "Publicly accessible URL or authenticated endpoint"
+                },
+                "local": {
+                    "format": {"source_type": "local", "path": "/path/to/local/spark-logs/"},
+                    "requirements": "Local file system access to log files"
                 }
             }
         },

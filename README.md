@@ -62,6 +62,15 @@ uv run python start.py
 - 报告列表: http://localhost:7799/api/reports
 - MCP 端点: http://localhost:7799/mcp
 
+## 分析样例
+![emr-serverless-small-job](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/Screenshot%202025-12-06%20at%2015-12-46%20Spark%20Event%20Log%20Analysis%20Report.png)
+
+![emr-eks-big-job](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/Screenshot%202025-12-06%20at%2015-10-42%20Spark%20Event%20Log%20Analysis%20Report.png)
+
+![emr-eks-big-job-sub-01](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/202512061601158.png)
+
+![emr-eks-big-job-sub-02](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/202512061601391.png)
+
 ## 项目结构
 
 ```
@@ -247,6 +256,7 @@ MCP_TRANSPORT="stdio" npx @modelcontextprotocol/inspector uv run python start.py
 MCP_TRANSPORT="streamable-http" uv run python start.py
 npx @modelcontextprotocol/inspector --cli http://localhost:7799 --transport http --method tools/list
 ```
+
 
 ## 支持
 

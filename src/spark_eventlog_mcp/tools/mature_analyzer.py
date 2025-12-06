@@ -372,11 +372,18 @@ class MatureSparkEventLogAnalyzer:
             configured_memory_str = self.spark_properties.get('spark.executor.memory', '1g')
             configured_memory_bytes = self._parse_memory_size(configured_memory_str)
 
+            # 计算 Overhead Memory
+            overhead_memory = self._calculate_executor_overhead_memory(configured_memory_bytes)
+
             # 计算实际内存使用（峰值执行内存）
             actual_memory_used = max((task.peak_execution_memory for task in executor_tasks), default=0)
 
             # 获取 CPU 核心数（从 ExecutorAdded 或配置中获取）
             total_cores = executor_data.get('totalCores') or int(self.spark_properties.get('spark.executor.cores', '2'))
+
+            # 计算 Shuffle 数据
+            total_shuffle_read = sum(task.shuffle_remote_bytes_read + task.shuffle_local_bytes_read for task in executor_tasks)
+            total_shuffle_write = sum(task.shuffle_bytes_written for task in executor_tasks)
 
             metrics = ExecutorMetrics(
                 executor_id=executor_id,
@@ -389,10 +396,11 @@ class MatureSparkEventLogAnalyzer:
                 actual_memory_used=actual_memory_used,
                 max_onheap_memory=executor_data.get('maxOnheapMemory', 0) or 0,
                 max_offheap_memory=executor_data.get('maxOffheapMemory', 0) or 0,
+                overhead_memory=overhead_memory,
                 total_gc_time=sum(task.jvm_gc_time for task in executor_tasks),
                 total_input_bytes=sum(task.input_bytes_read for task in executor_tasks),
-                total_shuffle_read=sum(task.shuffle_remote_bytes_read + task.shuffle_local_bytes_read for task in executor_tasks),
-                total_shuffle_write=sum(task.shuffle_bytes_written for task in executor_tasks)
+                total_shuffle_read=total_shuffle_read,
+                total_shuffle_write=total_shuffle_write
             )
 
             executor_metrics.append(metrics)
@@ -410,6 +418,9 @@ class MatureSparkEventLogAnalyzer:
         # 解析内存配置
         memory_str = self.driver_info.get('memory', '1g')
         memory_bytes = self._parse_memory_size(memory_str)
+
+        # 计算 Driver Overhead Memory
+        overhead_memory = self._calculate_driver_overhead_memory(memory_bytes)
 
         # 计算执行统计
         total_gc_time = sum(task.jvm_gc_time for task in driver_tasks)
@@ -432,6 +443,7 @@ class MatureSparkEventLogAnalyzer:
             memory=memory_str,
             memory_bytes=memory_bytes,
             host=self.driver_info.get('host', 'unknown'),
+            overhead_memory=overhead_memory,
             total_gc_time=total_gc_time,
             total_execution_time=total_execution_time,
             peak_memory_used=peak_memory_used,
@@ -673,12 +685,15 @@ class MatureSparkEventLogAnalyzer:
 
         executor_memory_str = self.spark_properties.get('spark.executor.memory', '1g')
         executor_memory_bytes = self._parse_memory_size(executor_memory_str)
+        
+        # 计算配置的overhead内存
+        executor_overhead_bytes = self._calculate_executor_overhead_memory(executor_memory_bytes)
 
         if max_memory_used > executor_memory_bytes * 0.8:
             recommendations.append({
                 'title': '增加 Executor 内存',
-                'description': f'峰值内存使用 {self._format_bytes(max_memory_used)} 接近配置的 {executor_memory_str}',
-                'suggestion': f'建议增加到 {self._format_bytes(int(max_memory_used * 1.5))}',
+                'description': f'峰值内存使用 {self._format_bytes(max_memory_used)}, 配置Executor内存 {executor_memory_str} 配置的overhead 内存 {self._format_bytes(executor_overhead_bytes)}',
+                'suggestion': f'建议增加到 {self._format_bytes(int(max_memory_used * 1.2))}',
                 'config': f'spark.executor.memory={self._recommend_memory_size(max_memory_used)}',
                 'priority': 'HIGH'
             })
@@ -795,6 +810,54 @@ class MatureSparkEventLogAnalyzer:
                 return int(float(memory_str[:-1]) * multiplier)
 
         return int(memory_str) if memory_str.isdigit() else 1024**3
+
+    def _calculate_executor_overhead_memory(self, executor_memory_bytes: int) -> int:
+        """计算 Executor Overhead Memory"""
+        # 优先使用直接配置的 spark.executor.memoryOverhead
+        overhead_direct_str = self.spark_properties.get('spark.executor.memoryOverhead', None)
+        if overhead_direct_str:
+            try:
+                return self._parse_memory_size(overhead_direct_str)
+            except (ValueError, TypeError):
+                pass
+
+        # 如果没有直接配置，使用 10% 规则和 384M 取大值
+        overhead_factor_str = self.spark_properties.get('spark.executor.memoryOverheadFactor', '0.1')
+        try:
+            overhead_factor = float(overhead_factor_str)
+        except (ValueError, TypeError):
+            overhead_factor = 0.1  # 默认 10%
+
+        # 按 10% 计算 overhead
+        calculated_overhead = int(executor_memory_bytes * overhead_factor)
+
+        # 最小 overhead 384MB
+        min_overhead = 384 * 1024 * 1024  # 384MB
+        return max(calculated_overhead, min_overhead)
+    
+    def _calculate_driver_overhead_memory(self, driver_memory_bytes: int) -> int:
+        """计算 Driver Overhead Memory"""
+        # 优先使用直接配置的 spark.driver.memoryOverhead
+        overhead_direct_str = self.spark_properties.get('spark.driver.memoryOverhead', None)
+        if overhead_direct_str:
+            try:
+                return self._parse_memory_size(overhead_direct_str)
+            except (ValueError, TypeError):
+                pass
+
+        # 如果没有直接配置，使用 10% 规则和 384M 取大值
+        overhead_factor_str = self.spark_properties.get('spark.driver.memoryOverheadFactor', '0.1')
+        try:
+            overhead_factor = float(overhead_factor_str)
+        except (ValueError, TypeError):
+            overhead_factor = 0.1  # 默认 10%
+
+        # 按 10% 计算 overhead
+        calculated_overhead = int(driver_memory_bytes * overhead_factor)
+
+        # 最小 overhead 384MB
+        min_overhead = 384 * 1024 * 1024  # 384MB
+        return max(calculated_overhead, min_overhead)
 
     def _recommend_memory_size(self, peak_memory: int) -> str:
         """推荐内存大小"""

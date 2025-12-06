@@ -39,7 +39,7 @@ class AnalysisConfig(BaseModel):
 
 class ReportConfig(BaseModel):
     """Configuration for report generation"""
-    report_format: Literal["html", "json", "pdf"] = Field("html", description="Output format for the report")
+    report_format: Literal["html"] = Field("html", description="Output format for the report")
     include_visualizations: bool = Field(True, description="Include charts and visualizations")
     include_raw_metrics: bool = Field(False, description="Include raw metric data")
     custom_title: Optional[str] = Field(None, description="Custom title for the report")
@@ -191,12 +191,30 @@ class AnalyzePerformanceInput(BaseModel):
     )
 
 class GenerateReportInput(BaseModel):
-    """Input for generate_report tool"""
+    """
+    Input for end-to-end generate_report tool
+    
+    This input model supports complete end-to-end report generation from raw data sources
+    to formatted reports with analysis and optimization suggestions. It can work with:
+    1. Raw data sources (performs parsing, analysis, and report generation)
+    2. Existing analysis results (skips parsing and analysis, generates report only)
+    3. Current session data (uses cached data from previous operations)
+    """
     report_config: ReportConfig = Field(
-        default_factory=ReportConfig, description="Report configuration"
+        default_factory=ReportConfig, 
+        description="Report configuration including format, visualizations, and content options"
+    )
+    data_source: Optional[DataSource] = Field(
+        None,
+        description="Data source for end-to-end processing (S3, URL, or local file path). If not provided, uses current session data or analysis_result"
+    )
+    analysis_config: Optional[AnalysisConfig] = Field(
+        default_factory=AnalysisConfig,
+        description="Analysis configuration for performance analysis (depth, included metrics, etc.)"
     )
     analysis_result: Optional[AnalysisResult] = Field(
-        None, description="Analysis result (if not using current session)"
+        None, 
+        description="Existing analysis result (if provided, skips data parsing and analysis phases)"
     )
 
 class GetOptimizationSuggestionsInput(BaseModel):

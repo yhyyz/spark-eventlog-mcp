@@ -1250,15 +1250,15 @@ class HTMLReportGenerator:
                                     <div class="stat-card-mini">
                                         <span class="stat-icon">💾</span>
                                         <div class="stat-content">
-                                            <div class="stat-value highlight">{{executor_available_memory}}</div>
-                                            <div class="stat-label">Available Memory</div>
+                                            <div class="stat-value highlight">{{executor_total_memory}}</div>
+                                            <div class="stat-label">Total Memory</div>
                                         </div>
                                     </div>
                                     <div class="stat-card-mini">
                                         <span class="stat-icon">🗄️</span>
                                         <div class="stat-content">
-                                            <div class="stat-value highlight">{{executor_storage_memory}}</div>
-                                            <div class="stat-label">Storage Memory</div>
+                                            <div class="stat-value highlight">{{executor_overhead_memory}}</div>
+                                            <div class="stat-label">Overhead Memory</div>
                                         </div>
                                     </div>
                                     <div class="stat-card-mini">
@@ -1271,8 +1271,8 @@ class HTMLReportGenerator:
                                     <div class="stat-card-mini">
                                         <span class="stat-icon">🔄</span>
                                         <div class="stat-content">
-                                            <div class="stat-value">{{gc_time_formatted}}</div>
-                                            <div class="stat-label">GC Time</div>
+                                            <div class="stat-value">{{avg_executor_overhead_memory}}</div>
+                                            <div class="stat-label">Overhead/Exec</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1326,8 +1326,8 @@ class HTMLReportGenerator:
                                         <span class="compact-value highlight">{{driver_memory}}</span>
                                     </div>
                                     <div class="compact-metric">
-                                        <span class="compact-label">Storage Memory</span>
-                                        <span class="compact-value highlight">{{driver_storage_memory_formatted}}</span>
+                                        <span class="compact-label">Overhead Memory</span>
+                                        <span class="compact-value highlight">{{driver_overhead_memory_formatted}}</span>
                                     </div>
                                     <div class="compact-metric">
                                         <span class="compact-label">GC Time</span>
@@ -1467,7 +1467,10 @@ class HTMLReportGenerator:
                         y: data.configured_memory,
                         name: 'Configured Memory',
                         type: 'bar',
-                        marker: { color: '#10b981' }
+                        marker: { color: '#10b981' },
+                        text: data.configured_memory.map(bytes => formatBytes(bytes)),
+                        textposition: 'auto',
+                        hovertemplate: '<b>Executor %{x}</b><br>Configured Memory: %{text}<extra></extra>'
                     };
 
                     const trace2 = {
@@ -1475,7 +1478,10 @@ class HTMLReportGenerator:
                         y: data.actual_memory_used,
                         name: 'Actual Memory Used',
                         type: 'bar',
-                        marker: { color: '#f59e0b' }
+                        marker: { color: '#f59e0b' },
+                        text: data.actual_memory_used.map(bytes => formatBytes(bytes)),
+                        textposition: 'auto',
+                        hovertemplate: '<b>Executor %{x}</b><br>Actual Memory: %{text}<extra></extra>'
                     };
 
                     const trace3 = {
@@ -1483,7 +1489,10 @@ class HTMLReportGenerator:
                         y: data.shuffle_read,
                         name: 'Shuffle Read',
                         type: 'bar',
-                        marker: { color: '#3b82f6' }
+                        marker: { color: '#3b82f6' },
+                        text: data.shuffle_read.map(bytes => formatBytes(bytes)),
+                        textposition: 'auto',
+                        hovertemplate: '<b>Executor %{x}</b><br>Shuffle Read: %{text}<extra></extra>'
                     };
 
                     const trace4 = {
@@ -1491,7 +1500,10 @@ class HTMLReportGenerator:
                         y: data.shuffle_write,
                         name: 'Shuffle Write',
                         type: 'bar',
-                        marker: { color: '#8b5cf6' }
+                        marker: { color: '#8b5cf6' },
+                        text: data.shuffle_write.map(bytes => formatBytes(bytes)),
+                        textposition: 'auto',
+                        hovertemplate: '<b>Executor %{x}</b><br>Shuffle Write: %{text}<extra></extra>'
                     };
 
                     const layout = {
@@ -1504,7 +1516,7 @@ class HTMLReportGenerator:
                         },
                         yaxis: {
                             gridcolor: '#333333',
-                            title: 'GB / Bytes'
+                            title: 'Bytes'
                         },
                         barmode: 'group',
                         margin: { t: 20, b: 50, l: 80, r: 20 }
@@ -1689,10 +1701,21 @@ class HTMLReportGenerator:
 
                 // 格式化字节数
                 function formatBytes(bytes) {
-                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-                    if (bytes === 0) return '0 B';
-                    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-                    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+                    if (bytes === 0 || bytes === null || bytes === undefined) return '0 B';
+
+                    // 确保bytes是正数
+                    const absBytes = Math.abs(Number(bytes));
+                    if (!isFinite(absBytes)) return '0 B';
+
+                    let i = Math.floor(Math.log(absBytes) / Math.log(1024));
+
+                    // 确保i在合理范围内
+                    if (isNaN(i) || i < 0) i = 0;
+                    if (i >= sizes.length) i = sizes.length - 1;
+
+                    const size = absBytes / Math.pow(1024, i);
+                    return Math.round(size * 100) / 100 + ' ' + sizes[i];
                 }
 
                 // 初始化图表数据
@@ -1848,7 +1871,6 @@ class HTMLReportGenerator:
         # 性能指标替换
         html_content = html_content.replace('{{peak_memory_formatted}}', formatted_data['peak_memory'])
         html_content = html_content.replace('{{cpu_time_formatted}}', formatted_data['cpu_time'])
-        html_content = html_content.replace('{{gc_time_formatted}}', formatted_data['gc_time'])
 
         # Shuffle 指标替换
         html_content = html_content.replace('{{shuffle_read_formatted}}', formatted_data['shuffle_read'])
@@ -1864,33 +1886,35 @@ class HTMLReportGenerator:
 
         # Executor 内存分析
         if result.executors:
-            total_available_memory = sum(exec.max_memory for exec in result.executors)
-            total_configured_memory = sum(exec.configured_memory_bytes for exec in result.executors)
+            # Total Memory = sum of configured executor memory only (不包含driver和overhead)
+            total_executor_memory = sum(exec.configured_memory_bytes for exec in result.executors)
 
-            # Storage Memory 近似计算（实际可用内存 - 一些系统保留）
-            total_storage_memory = total_available_memory * 0.6  # Spark 默认约60%用于storage
+            # Executor Overhead Memory = sum of executor overhead only (不包含driver overhead)
+            total_executor_overhead = sum(exec.overhead_memory for exec in result.executors)
 
-            html_content = html_content.replace('{{executor_configured_memory_total}}', self._format_bytes(total_configured_memory))
-            html_content = html_content.replace('{{executor_available_memory}}', self._format_bytes(total_available_memory))
-            html_content = html_content.replace('{{executor_storage_memory}}', self._format_bytes(int(total_storage_memory)))
+            # Single Executor Overhead Memory (固定值，不是平均值)
+            single_executor_overhead = result.executors[0].overhead_memory if result.executors else 0
+
+            html_content = html_content.replace('{{executor_configured_memory_total}}', self._format_bytes(total_executor_memory))
+            html_content = html_content.replace('{{executor_total_memory}}', self._format_bytes(total_executor_memory))
+            html_content = html_content.replace('{{executor_overhead_memory}}', self._format_bytes(total_executor_overhead))
+            html_content = html_content.replace('{{avg_executor_overhead_memory}}', self._format_bytes(single_executor_overhead))
         else:
             html_content = html_content.replace('{{executor_configured_memory_total}}', 'N/A')
-            html_content = html_content.replace('{{executor_available_memory}}', 'N/A')
-            html_content = html_content.replace('{{executor_storage_memory}}', 'N/A')
+            html_content = html_content.replace('{{executor_total_memory}}', 'N/A')
+            html_content = html_content.replace('{{executor_overhead_memory}}', 'N/A')
+            html_content = html_content.replace('{{avg_executor_overhead_memory}}', 'N/A')
 
         # Driver 指标替换
         if result.driver_metrics:
-            # 计算 Driver Storage Memory（按实际可用内存的60%计算）
-            driver_storage_memory = int(result.driver_metrics.actual_memory_available * 0.6) if result.driver_metrics.actual_memory_available > 0 else 0
-
             html_content = html_content.replace('{{driver_cores}}', str(result.driver_metrics.cores))
             html_content = html_content.replace('{{driver_memory}}', result.driver_metrics.memory)
-            html_content = html_content.replace('{{driver_storage_memory_formatted}}', self._format_bytes(driver_storage_memory))
+            html_content = html_content.replace('{{driver_overhead_memory_formatted}}', self._format_bytes(result.driver_metrics.overhead_memory))
             html_content = html_content.replace('{{driver_gc_time_formatted}}', f"{result.driver_metrics.total_gc_time/1000:.1f}s")
         else:
             html_content = html_content.replace('{{driver_cores}}', 'N/A')
             html_content = html_content.replace('{{driver_memory}}', 'N/A')
-            html_content = html_content.replace('{{driver_storage_memory_formatted}}', 'N/A')
+            html_content = html_content.replace('{{driver_overhead_memory_formatted}}', 'N/A')
             html_content = html_content.replace('{{driver_gc_time_formatted}}', 'N/A')
 
         # 其他内容替换
@@ -1948,7 +1972,6 @@ class HTMLReportGenerator:
 
         # 格式化时间
         formatted['cpu_time'] = f"{result.performance_metrics.total_cpu_time_ms/1000:.1f}s"
-        formatted['gc_time'] = f"{result.performance_metrics.total_gc_time_ms/1000:.1f}s"
 
         # 格式化 Shuffle
         formatted['shuffle_read'] = self._format_bytes(result.shuffle_analysis.total_shuffle_read_bytes)
@@ -1995,12 +2018,12 @@ class HTMLReportGenerator:
                 'shuffle_write_bytes': [stage['shuffle_write_bytes'] for stage in stages]
             }
 
-        # Executor 资源数据 - 包含配置内存和实际使用（转换为GB）
+        # Executor 资源数据 - 统一使用字节单位，由JavaScript formatBytes处理
         if result.executors:
             chart_data['executor_resources'] = {
                 'executor_ids': [exec.executor_id for exec in result.executors],
-                'configured_memory': [exec.configured_memory_bytes / (1024**3) for exec in result.executors],  # 转换为GB
-                'actual_memory_used': [exec.max_memory / (1024**3) for exec in result.executors],  # 使用真实可用内存，转换为GB
+                'configured_memory': [exec.configured_memory_bytes for exec in result.executors],  # 保持字节单位
+                'actual_memory_used': [exec.max_memory for exec in result.executors],  # 保持字节单位
                 'shuffle_read': [exec.total_shuffle_read for exec in result.executors],
                 'shuffle_write': [exec.total_shuffle_write for exec in result.executors]
             }
@@ -2121,7 +2144,7 @@ class HTMLReportGenerator:
                     <th class="sortable" onclick="sortTable(0)">Executor ID <span class="sort-indicator">⇅</span></th>
                     <th class="sortable" onclick="sortTable(1)">Host <span class="sort-indicator">⇅</span></th>
                     <th class="sortable" onclick="sortTable(2)">Cores <span class="sort-indicator">⇅</span></th>
-                    <th class="sortable" onclick="sortTable(3)">Storage Memory <span class="sort-indicator">⇅</span></th>
+                    <th class="sortable" onclick="sortTable(3)">Overhead Memory <span class="sort-indicator">⇅</span></th>
                     <th class="sortable" onclick="sortTable(4)">Shuffle Read <span class="sort-indicator">⇅</span></th>
                     <th class="sortable" onclick="sortTable(5)">Shuffle Write <span class="sort-indicator">⇅</span></th>
                     <th class="sortable" onclick="sortTable(6)">GC Time <span class="sort-indicator">⇅</span></th>
@@ -2136,7 +2159,7 @@ class HTMLReportGenerator:
                 <td class="id-cell">{executor.executor_id}</td>
                 <td class="host-cell" title="{executor.host}">{executor.host}</td>
                 <td class="cores-cell">{executor.cores}</td>
-                <td class="memory-cell">{executor.memory}</td>
+                <td class="memory-cell">{self._format_bytes(executor.overhead_memory)}</td>
                 <td class="memory-cell">{self._format_bytes(executor.total_shuffle_read)}</td>
                 <td class="memory-cell">{self._format_bytes(executor.total_shuffle_write)}</td>
                 <td>{executor.total_gc_time / 1000:.1f}s</td>
