@@ -14,7 +14,24 @@
 
 ### MCP 客户端集成
 
-#### stdio 模式 (推荐用于本地开发)
+#### uvx 模式 (推荐 - 直接从 GitHub 运行)
+
+```json
+{
+  "mcpServers": {
+    "spark-eventlog-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "https://github.com/yhyyz/spark-eventlog-mcp", "spark-eventlog-mcp"],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+#### stdio 模式 (本地开发)
 
 ```json
 {

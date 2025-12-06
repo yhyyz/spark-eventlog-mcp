@@ -16,7 +16,24 @@ A comprehensive Spark event log analysis MCP server built on FastMCP 2.0 and Fas
 
 ### MCP Client Integration
 
-#### stdio Mode (Recommended for Local Development)
+#### uvx Mode (Recommended - Direct from GitHub)
+
+```json
+{
+  "mcpServers": {
+    "spark-eventlog-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "https://github.com/yhyyz/spark-eventlog-mcp", "spark-eventlog-mcp"],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+#### stdio Mode (Local Development)
 
 ```json
 {
