@@ -48,7 +48,8 @@ uv run python start.py
 {
   "mcpServers": {
     "spark-eventlog": {
-      "url": "http://localhost:7799/mcp"
+      "url": "http://localhost:7799/mcp",
+      "type": "http"
     }
   }
 }
