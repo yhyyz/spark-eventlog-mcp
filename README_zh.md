@@ -19,7 +19,7 @@
 ```json
 {
   "mcpServers": {
-    "spark-eventlog-mcp": {
+    "spark-eventlog": {
       "type": "stdio",
       "command": "uvx",
       "args": [

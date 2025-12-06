@@ -21,7 +21,7 @@ A comprehensive Spark event log analysis MCP server built on FastMCP 2.0 and Fas
 ```json
 {
   "mcpServers": {
-    "spark-eventlog-mcp": {
+    "spark-eventlog": {
       "type": "stdio",
       "command": "uvx",
       "args": [
