@@ -1,0 +1,51 @@
+name: Test Package Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-build:
+    name: Test package build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Verify package structure
+      run: |
+        echo "=== Project Structure ==="
+        find . -name "*.py" -path "./src/*" | head -20
+        echo "=== PyProject Configuration ==="
+        cat pyproject.toml
+
+    - name: Build package
+      run: |
+        python -m build
+
+    - name: Check package
+      run: |
+        python -m twine check dist/*
+
+    - name: List built packages
+      run: |
+        echo "=== Built Packages ==="
+        ls -la dist/
+
+    - name: Test installation
+      run: |
+        pip install dist/*.whl
+        python -c "import spark_eventlog_mcp; print('Package imported successfully')"

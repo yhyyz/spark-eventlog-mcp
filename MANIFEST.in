@@ -1,0 +1,21 @@
+# Include documentation
+include README.md
+include README_zh.md
+include LICENSE
+
+# Include configuration files
+include pyproject.toml
+include start.py
+
+# Include package data
+recursive-include src/spark_eventlog_mcp *.py
+recursive-include src/spark_eventlog_mcp *.html
+recursive-include src/spark_eventlog_mcp *.css
+recursive-include src/spark_eventlog_mcp *.js
+
+# Exclude development files
+exclude *.pyc
+exclude .gitignore
+exclude .env*
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
