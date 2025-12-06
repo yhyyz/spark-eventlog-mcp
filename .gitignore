@@ -149,8 +149,11 @@ Thumbs.db
 
 # Test files
 test_*.log
+test_*.py
 *.eventlog
 test_data/
+*_test.py
+test_mature_data_loader.py
 
 # AWS credentials (if accidentally included)
 .aws/
