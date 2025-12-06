@@ -168,3 +168,4 @@ report_data/*.html
 .spec-workflow/
 .kiro/
 .serena/
+.claude/
