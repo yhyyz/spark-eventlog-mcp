@@ -89,9 +89,11 @@ uv run python start.py
 
 ![emr-serverless-small-job](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/Screenshot%202025-12-06%20at%2015-12-46%20Spark%20Event%20Log%20Analysis%20Report.png)
 
-![emr-eks-big-job](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/Screenshot%202025-12-06%20at%2015-10-42%20Spark%20Event%20Log%20Analysis%20Report.png)
+![emr-eks-big-job-1](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/202512121551514.png)
 
-![emr-eks-big-job-sub-01](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/202512061601158.png)
+![emr-eks-big-job-2](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/Screenshot%202025-12-12%20at%2015-53-47%20Spark%20Event%20Log%20Analysis%20Report.png)
+
+![emr-eks-big-job-sub-01](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/202512121521204.png)
 
 ![emr-eks-big-job-sub-02](https://pcmyp.oss-cn-beijing.aliyuncs.com/markdown/202512061601391.png)
 
