@@ -9,8 +9,10 @@ A comprehensive Spark event log analysis MCP server built on FastMCP 2.0 and Fas
 - 🌐 **FastMCP & FastAPI Integration**: MCP protocol support and analysis report APIs powered by FastAPI & FastMCP
 - 📊 **Performance Analysis**: Shuffle analysis, resource utilization monitoring, task execution analysis
 - 📈 **Visual Reports**: Auto-generated interactive HTML reports with direct browser access
-- ☁️ **Multiple Data Sources**: Support for S3, HTTP URLs, and local files
+- ☁️ **Cloud Data Sources**: Support for S3 buckets and HTTP URLs with automatic path detection
 - 💡 **Intelligent Optimization**: Automated optimization recommendations based on analysis results
+- 🔧 **Modular Architecture**: Clean separation of concerns with specialized modules for tools, middleware, and configuration
+- 📝 **Enhanced Logging**: Comprehensive request/response logging with detailed debugging information
 
 ## Quick Start
 
@@ -102,17 +104,20 @@ uv run python start.py
 ```
 spark-eventlog-mcp/
 ├── src/spark_eventlog_mcp/
-│   ├── server.py              # FastAPI + MCP integrated server
+│   ├── server.py              # Main FastAPI + MCP integrated server (refactored)
 │   ├── core/
-│   │   └── mature_data_loader.py    # Data loader (S3/URL/Local)
+│   │   └── mature_data_loader.py    # Data loader (S3/URL)
 │   ├── tools/
+│   │   ├── mcp_tools.py      # MCP tool implementations (NEW)
 │   │   ├── mature_analyzer.py       # Event log analyzer
 │   │   └── mature_report_generator.py  # HTML report generator
 │   ├── models/
 │   │   ├── schemas.py        # Pydantic data models
 │   │   └── mature_models.py  # Analysis result models
 │   └── utils/
-│       └── helpers.py         # Utility functions and logging config
+│       ├── helpers.py         # Utility functions and logging config
+│       ├── middleware.py      # FastAPI request logging middleware (NEW)
+│       └── uvicorn_config.py  # Uvicorn logging configuration (NEW)
 ├── report_data/               # Generated reports storage
 ├── start.py                   # Launch script
 ├── README.md                 # This file (English)
@@ -121,14 +126,29 @@ spark-eventlog-mcp/
 
 ## MCP Tools
 
-| Tool Name | Description |
-|-----------|-------------|
-| `parse_eventlog` | Parse event logs (S3/URL/Local) |
-| `analyze_performance` | Execute performance analysis |
-| `generate_report` | Generate visual reports |
-| `get_optimization_suggestions` | Get optimization recommendations |
-| `get_analysis_status` | Query current analysis status |
-| `clear_session` | Clear session cache |
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `generate_report` | **End-to-end report generation** - Auto-detects S3/URL, analyzes data, generates HTML reports | `path: str` (S3 or HTTP URL) |
+| `get_analysis_status` | Query current analysis session status and metrics | None |
+| `clear_session` | Clear session cache and reset server state | None |
+
+### Simplified Tool Usage
+
+The refactored MCP tools focus on simplicity and automation:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "generate_report",
+    "arguments": {
+      "path": "s3://my-bucket/spark-logs/"
+    }
+  },
+  "id": 1
+}
+```
 
 ## RESTful API Endpoints
 
@@ -174,12 +194,22 @@ CACHE_TTL=300
 DEFAULT_SOURCE_TYPE=s3  # s3, url, or local
 ```
 
-### Log Format
+### Enhanced Logging Features
 
-Logs contain detailed debugging information:
+The refactored architecture provides comprehensive request/response logging:
 
+**FastAPI Request Logging:**
 ```
-2025-12-05 10:30:45 - INFO     - [server.py:243:generate_report] - spark-eventlog-mcp - Generating html report
+2025-12-18 10:30:45 - INFO - Request started - POST /mcp
+2025-12-18 10:30:45 - INFO - Client: 192.168.1.100 | User-Agent: Java SDK MCP Client/1.0.0
+2025-12-18 10:30:45 - INFO - Content-Type: application/json | Accept: application/json, text/event-stream
+2025-12-18 10:30:45 - INFO - Request body: {"jsonrpc":"2.0","method":"tools/call",...}
+2025-12-18 10:30:45 - INFO - Request completed - Status: 200 | Duration: 2.156s
+```
+
+**Application Logging:**
+```
+2025-12-18 10:30:45 - INFO - [mcp_tools.py:243:generate_report_tool] - spark-eventlog-mcp - Starting end-to-end report generation
 ```
 
 Format: `Timestamp - Level - [Filename:Line:Function] - Logger Name - Message`
@@ -257,6 +287,30 @@ AWS_SECRET_ACCESS_KEY=xxx
 # Enable DEBUG logs
 LOG_LEVEL=DEBUG uv run python start.py
 ```
+
+## Recent Improvements (2025-12-18)
+
+### Major Code Refactoring
+
+- **🎯 Simplified MCP Tools**: `generate_report` now requires only a single string parameter (S3 or URL path)
+- **📦 Modular Architecture**: Extracted MCP tool implementations from main server to dedicated modules
+- **📝 Enhanced Logging**: Added comprehensive request/response logging with client info, headers, and request body
+- **🔧 Centralized Configuration**: Moved uvicorn and middleware configuration to separate utility modules
+- **📉 Reduced Complexity**: Main server.py reduced from ~1150 to ~370 lines (70% reduction)
+
+### Architecture Changes
+
+- **New Module**: `tools/mcp_tools.py` - Contains all MCP tool implementations
+- **New Module**: `utils/middleware.py` - FastAPI request logging middleware
+- **New Module**: `utils/uvicorn_config.py` - Centralized uvicorn logging configuration
+- **Auto-Detection**: Automatic path type detection (S3 vs URL) in `generate_report` tool
+- **Simplified Interface**: Single-parameter MCP tools with internal logic handling complexity
+
+### HTTP Transport Fixes
+
+- **MCP Protocol Compatibility**: Fixed HTTP 406 errors by ensuring proper Accept headers
+- **Request Tracing**: Added detailed request/response logging for better debugging
+- **Error Handling**: Improved error messages and status code handling
 
 ## Tech Stack
 

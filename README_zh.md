@@ -4,11 +4,13 @@
 
 ## 特性
 
-- 🌐 **FastMCP & FastAPI API**: FastAPI&FastMCP提供的MCP支持和分析报告API
+- 🌐 **FastMCP & FastAPI 集成**: FastMCP 2.0协议支持和FastAPI分析报告API
 - 📊 **性能分析**: Shuffle 分析、资源利用率监控、任务执行分析
 - 📈 **可视化报告**: 自动生成交互式 HTML 报告,支持浏览器直接访问
-- ☁️ **多数据源**: 支持 S3、HTTP URL、本地文件
+- ☁️ **云数据源**: 支持 S3 桶和 HTTP URL,自动路径检测
 - 💡 **智能优化**: 基于分析结果的自动优化建议
+- 🔧 **模块化架构**: 清晰的关注点分离,工具、中间件和配置专用模块
+- 📝 **增强日志**: 全面的请求/响应日志记录,包含详细调试信息
 
 ## 快速开始
 
@@ -100,32 +102,51 @@ uv run python start.py
 ```
 spark-eventlog-mcp/
 ├── src/spark_eventlog_mcp/
-│   ├── server.py              # FastAPI + MCP 集成服务器
+│   ├── server.py              # 主要 FastAPI + MCP 集成服务器 (重构后)
 │   ├── core/
-│   │   └── mature_data_loader.py    # 数据加载器 (S3/URL/本地)
+│   │   └── mature_data_loader.py    # 数据加载器 (S3/URL)
 │   ├── tools/
+│   │   ├── mcp_tools.py      # MCP 工具实现 (新增)
 │   │   ├── mature_analyzer.py       # 事件日志分析器
 │   │   └── mature_report_generator.py  # HTML 报告生成器
 │   ├── models/
 │   │   ├── schemas.py        # Pydantic 数据模型
 │   │   └── mature_models.py  # 分析结果模型
 │   └── utils/
-│       └── helpers.py         # 工具函数和日志配置
+│       ├── helpers.py         # 工具函数和日志配置
+│       ├── middleware.py      # FastAPI 请求日志中间件 (新增)
+│       └── uvicorn_config.py  # Uvicorn 日志配置 (新增)
 ├── report_data/               # 生成的报告存储目录
 ├── start.py                   # 启动脚本
-└── README.md                 # 本文件
+├── README.md                 # 英文文档
+└── README_zh.md              # 中文文档
 ```
 
 ## MCP 工具
 
-| 工具名称 | 功能描述 |
-|---------|---------|
-| `parse_eventlog` | 解析事件日志 (S3/URL/本地) |
-| `analyze_performance` | 执行性能分析 |
-| `generate_report` | 生成可视化报告 |
-| `get_optimization_suggestions` | 获取优化建议 |
-| `get_analysis_status` | 查询当前分析状态 |
-| `clear_session` | 清除会话缓存 |
+| 工具名称 | 功能描述 | 参数 |
+|---------|---------|-----|
+| `generate_report` | **端到端报告生成** - 自动检测S3/URL,分析数据,生成HTML报告 | `path: str` (S3 或 HTTP URL) |
+| `get_analysis_status` | 查询当前分析会话状态和指标 | 无 |
+| `clear_session` | 清除会话缓存并重置服务器状态 | 无 |
+
+### 简化的工具使用方式
+
+重构后的 MCP 工具专注于简单性和自动化:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "generate_report",
+    "arguments": {
+      "path": "s3://my-bucket/spark-logs/"
+    }
+  },
+  "id": 1
+}
+```
 
 ## RESTful API 端点
 
@@ -253,6 +274,30 @@ AWS_SECRET_ACCESS_KEY=xxx
 # 启用 DEBUG 日志
 LOG_LEVEL=DEBUG uv run python start.py
 ```
+
+## 最近改进 (2025-12-18)
+
+### 主要代码重构
+
+- **🎯 简化MCP工具**: `generate_report` 现在只需要一个字符串参数 (S3 或 URL 路径)
+- **📦 模块化架构**: 从主服务器提取 MCP 工具实现到专用模块
+- **📝 增强日志**: 添加全面的请求/响应日志记录，包含客户端信息、请求头和请求体
+- **🔧 集中配置**: 将 uvicorn 和中间件配置移到独立的工具模块
+- **📉 降低复杂度**: 主 server.py 从约1150行减少到370行 (减少70%)
+
+### 架构变更
+
+- **新模块**: `tools/mcp_tools.py` - 包含所有 MCP 工具实现
+- **新模块**: `utils/middleware.py` - FastAPI 请求日志中间件
+- **新模块**: `utils/uvicorn_config.py` - 集中的 uvicorn 日志配置
+- **自动检测**: 在 `generate_report` 工具中自动路径类型检测 (S3 vs URL)
+- **简化接口**: 单参数 MCP 工具，内部逻辑处理复杂性
+
+### HTTP 传输修复
+
+- **MCP 协议兼容性**: 通过确保正确的 Accept 请求头修复 HTTP 406 错误
+- **请求跟踪**: 添加详细的请求/响应日志以便更好地调试
+- **错误处理**: 改进错误信息和状态码处理
 
 ## 技术栈
 

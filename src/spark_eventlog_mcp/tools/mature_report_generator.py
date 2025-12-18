@@ -1830,7 +1830,7 @@ class HTMLReportGenerator:
         </html>
         """
 
-    async def generate_html_report(self, result: MatureAnalysisResult, server_host: str = "localhost", server_port: int = 7799, transport_mode="streamable-http") -> str:
+    async def generate_html_report(self, result: MatureAnalysisResult, html_report_host_address="http://localhost:7799", transport_mode="streamable-http") -> str:
         """
         生成 HTML 可视化报告并保存到文件
 
@@ -1940,7 +1940,7 @@ class HTMLReportGenerator:
         
         if  transport_mode=="streamable-http":
             # 返回 resource URL
-            return f"http://{server_host}:{server_port}/api/reports/{filename}"
+            return f"{html_report_host_address}/api/reports/{filename}"
         else:
             return str(absolute_path)
 

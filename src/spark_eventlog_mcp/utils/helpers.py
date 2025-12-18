@@ -62,6 +62,7 @@ def load_config_from_env() -> Dict[str, Any]:
         "log_level": os.getenv("LOG_LEVEL", "INFO").upper(),
         "mcp_host": os.getenv("MCP_HOST"),
         "mcp_port": os.getenv("MCP_PORT"),
+        "html_report_host_address": os.getenv("HTML_REPORT_HOST_ADDRESS","http://localhost:7799"),
     }
 
     # AWS settings with S3 as default
